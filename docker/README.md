@@ -54,6 +54,22 @@ docker compose up -d
 
 `src.repos` / `Dockerfile` を更新したときは `docker compose down -v` で named volume ごと削除してから build → up する（`down` だけでは volume が残り古い artifact が再利用される）。
 
+#### RMW (DDS / Zenoh) の切り替え
+
+デフォルトは Fast DDS (`rmw_fastrtps_cpp`)。Cyclone DDS / Zenoh への切り替えは `RMW_IMPLEMENTATION` 環境変数で行う。3 RMW 実装はすべて image に同梱済み (`ros-humble-rmw-{fastrtps,cyclonedds,zenoh}-cpp`)。**ホスト側に DDS / Zenoh をインストールする必要はない**（RMW プラグインはコンテナ内 ROS 2 プロセスに linked-in されるため）。
+
+| RMW | 起動コマンド | 備考 |
+|---|---|---|
+| Fast DDS (default) | `docker compose up -d` | 既存挙動。`shm_size: 1g` で共有メモリ転送を有効化済み |
+| Cyclone DDS | `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp docker compose up -d` | `network_mode: host` のためホスト NIC で multicast discovery。XML 設定不要 |
+| Zenoh | `RMW_IMPLEMENTATION=rmw_zenoh_cpp docker compose --profile zenoh up -d` | `--profile zenoh` で `zenoh-router` (zenohd) も同時起動。`tms` 内のノードは localhost:7447 の router を経由する |
+
+`network_mode: host` + `ROS_DOMAIN_ID` (デフォルト 0) のため、**ホスト上で同じ RMW を使っている別 ROS 2 ノードが居ると相互に discover される**。コンテナ内に閉じたければ `ROS_DOMAIN_ID` を変更するか、`compose.yaml` の `network_mode` を `bridge` に変更する（後者は multicast が通らなくなるため Cyclone DDS は unicast peers 明示が、Zenoh は router のホスト公開が必要）。
+
+Cyclone DDS の XML config を渡す場合は `CYCLONEDDS_URI=file:///workspace/src/ros2_tms_for_construction/docker/cyclonedds.xml` のように渡す（compose.yaml 側で pass-through 済み、ファイルはユーザーが用意）。Zenoh の session config を override したい場合は `ZENOH_SESSION_CONFIG_URI` / `ZENOH_CONFIG_OVERRIDE` を渡す。
+
+RMW を切り替えた後は、コンテナ内ですでに動いている ROS 2 ノードは古い RMW のままなので、`docker compose down && docker compose --profile zenoh up -d` 等で再起動すること。
+
 ### 4. MongoDB シードデータの投入（初回のみ）
 
 `demo/rostmsdb_collections.zip` を展開して `mongorestore` する:
@@ -169,7 +185,7 @@ docker compose down -v      # named volume ごと削除（DB・build キャッ�
 |---|---|
 | `Dockerfile` | ベース image + ROS 2 依存 + source build で BehaviorTree.CPP / mongocxx / mongo-c-driver + `vcs import` |
 | `Dockerfile.dockerignore` | このビルド専用の ignore ファイル（BuildKit の per-Dockerfile ignore）。allowlist 形式でビルドコンテキストを絞る |
-| `compose.yaml` | `mongodb`（`mongo:6.0`）と `tms` の 2 サービス、named volume、X11 forward、`network_mode: host`、`tms` には Fast DDS の SHM lock 用に `shm_size: 1g` を割当 |
+| `compose.yaml` | `mongodb`（`mongo:6.0`）/ `tms` / `zenoh-router`（profile `zenoh`）の 3 サービス、named volume、X11 forward、`network_mode: host`、`tms` には Fast DDS の SHM lock 用に `shm_size: 1g` を割当。`RMW_IMPLEMENTATION` で Fast DDS / Cyclone DDS / Zenoh を切替可能 |
 | `entrypoint.sh` | root で named volume 所有権を修正後、`gosu` で `ros` に drop。成功 sentinel で初回 `colcon build` を一度だけ実行 |
 | `restore-db.sh` | `demo/rostmsdb_collections.zip` を展開して `mongorestore`、その後 `parameter` collection から `description` (string) フィールドを除去（subtask が数値型のみ対応のため） |
 | `src.repos` | vcstool 管理。外部 repo を 40 桁 full commit SHA で pin（コメントで元ブランチと日付を保持） |

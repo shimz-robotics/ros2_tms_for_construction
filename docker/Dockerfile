@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nlohmann-json3-dev rapidjson-dev \
         qtbase5-dev libqt5svg5-dev libdw-dev \
         ros-humble-robot-localization \
+        ros-humble-rmw-cyclonedds-cpp \
+        ros-humble-rmw-zenoh-cpp \
     && apt-get install -y --no-install-recommends \
         'ros-humble-*moveit*' \
         'ros-humble-*nav2*' \
