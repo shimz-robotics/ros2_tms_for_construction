@@ -39,6 +39,17 @@ Terminal 2: bringup (zx200 / tms_if / tms_ts を 3 段連鎖起動)
 
 Unity 設定、RViz の初期姿勢回避、緑ボタン押下までの詳細手順は [docs/usage.md](docs/usage.md) 参照。
 
+### RMW (DDS) の切り替え
+
+デフォルトは Fast DDS (`rmw_fastrtps_cpp`)。Cyclone DDS への切り替えは `RMW_IMPLEMENTATION` 環境変数で行う。両 RMW 実装は image に同梱済み (`ros-humble-rmw-{fastrtps,cyclonedds}-cpp`)。ホスト側に DDS をインストールする必要はない（RMW プラグインはコンテナ内 ROS 2 プロセスに linked-in されるため）。
+
+| RMW | 起動コマンド |
+|---|---|
+| Fast DDS (default) | `docker compose up -d` |
+| Cyclone DDS | `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp docker compose up -d` |
+
+Cyclone DDS の XML config は `CYCLONEDDS_URI` で渡せる（compose.yaml 側で pass-through 済み、ファイルはユーザーが用意）。Zenoh で WAN / NAT 越し・複数現場を繋ぐ場合は、コンテナに rmw_zenoh を入れるのではなく host で [`zenoh-bridge-ros2dds`](https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds) を立てて DDS を bridge する構成を推奨（`rmw_zenohd` は DDS bridge を持たないため）。
+
 ### 停止
 
 ```bash
@@ -58,7 +69,7 @@ docker compose down         # コンテナ停止（named volume は保持）
 |---|---|
 | `Dockerfile` | ベース image + ROS 2 依存 + source build (BehaviorTree.CPP / mongocxx / mongo-c-driver) + `vcs import` |
 | `Dockerfile.dockerignore` | このビルド専用の ignore ファイル（BuildKit の per-Dockerfile ignore）。allowlist 形式でビルドコンテキストを絞る |
-| `compose.yaml` | `mongodb`（`mongo:6.0`）と `tms` の 2 サービス、named volume、X11 forward、`network_mode: host`、`tms` には Fast DDS の SHM lock 用に `shm_size: 1g` を割当 |
+| `compose.yaml` | `mongodb`（`mongo:6.0`）と `tms` の 2 サービス、named volume、X11 forward、`network_mode: host`、`tms` には Fast DDS の SHM lock 用に `shm_size: 1g` を割当。`RMW_IMPLEMENTATION` で Fast DDS / Cyclone DDS を切替可能 |
 | `src.repos` | vcstool 管理。外部 repo を 40 桁 full commit SHA で pin（コメントで元ブランチと日付を保持） |
 | `launch/bringup.launch.yaml` | Terminal 2 用。`zx200_bringup` → `tms_if_for_opera` → `tms_ts_construction` の 3 launch を timer 連鎖起動する YAML launch |
 | `scripts/entrypoint.sh` | container 起動時に root で named volume 所有権を修正後、`gosu` で `ros` に drop、成功 sentinel で初回 `colcon build` を一度だけ実行 |

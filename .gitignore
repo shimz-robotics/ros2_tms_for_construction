@@ -3,3 +3,7 @@ __pycache__
 
 # demo data for development
 demo_devmongodb-compass_1.43.0_amd64.deb
+
+# Cyclone DDS profile fetched from private opera-zenoh-config
+# (private repo 由来のため tracked にしない)
+docker/cyclonedds.conf
